@@ -117,7 +117,7 @@ pub fn cpu_init() {
     extern "C" {
         fn trap_vector_base();
     }
-    set_trap_vector_base(trap_vector_base as usize);
+    set_trap_vector_base(trap_vector_base as *const () as usize);
 }
 
 /// Bit 1: Supervisor Interrupt Enable
