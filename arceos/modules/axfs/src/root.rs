@@ -137,7 +137,13 @@ impl VfsNodeOps for RootDirectory {
             if rest_path.is_empty() {
                 ax_err!(PermissionDenied) // cannot rename mount points
             } else {
-                fs.root_dir().rename(rest_path, dst_path)
+                let path_prefix = &src_path[0..src_path.len() - rest_path.len()];
+                if dst_path.starts_with(&path_prefix) {
+                    let dst_rest = &dst_path[path_prefix.len()..];
+                    fs.root_dir().rename(rest_path, dst_rest)
+                } else {
+                    ax_err!(InvalidInput) // dst path does not start with src path
+                }
             }
         })
     }
