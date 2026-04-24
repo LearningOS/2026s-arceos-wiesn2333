@@ -7,6 +7,7 @@ use axerrno::LinuxError;
 use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
+use memory_addr::{align_up_4k, MemoryAddr, VirtAddr, VirtAddrRange};
 use arceos_posix_api as api;
 
 const SYS_IOCTL: usize = 29;
@@ -100,7 +101,7 @@ bitflags::bitflags! {
 fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     ax_println!("handle_syscall [{}] ...", syscall_num);
     let ret = match syscall_num {
-         SYS_IOCTL => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        SYS_IOCTL => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         SYS_SET_TID_ADDRESS => sys_set_tid_address(tf.arg0() as _),
         SYS_OPENAT => sys_openat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _, tf.arg3() as _),
         SYS_CLOSE => sys_close(tf.arg0() as _),
@@ -140,7 +141,45 @@ fn sys_mmap(
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    syscall_body!(sys_mmap, {
+        let mmap_flags = MmapFlags::from_bits(flags).ok_or(LinuxError::EINVAL)?;
+        let align_len = align_up_4k(length);
+
+        let aspace = current().task_ext().aspace.clone();
+        let mut aspace = aspace.lock();
+
+        let target_addr = if mmap_flags.contains(MmapFlags::MAP_FIXED) {
+            if addr.is_null() {
+                return Err(LinuxError::EINVAL);
+            }
+            VirtAddr::from(addr as usize).align_down_4k()
+        } else {
+            let hint = if addr.is_null() {
+                aspace.base()
+            } else {
+                VirtAddr::from(addr as usize)
+            };
+            aspace
+                .find_free_area(
+                    hint,
+                    align_len,
+                    VirtAddrRange::from_start_size(aspace.base(), aspace.size()),
+                )
+                .ok_or(LinuxError::ENOMEM)?
+        };
+
+        let map_flags: MappingFlags = MmapProt::from_bits(prot).ok_or(LinuxError::EINVAL)?.into();
+        aspace.map_alloc(target_addr, align_len, map_flags, true)?;
+
+        if !mmap_flags.contains(MmapFlags::MAP_ANONYMOUS) {
+            let file = api::get_file_like(fd)?;
+            let mut buf = alloc::vec![0u8; length];
+            file.read(&mut buf)?;
+            aspace.write(target_addr, &buf)?;
+        }
+
+        Ok(target_addr.as_usize() as isize)
+    })
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

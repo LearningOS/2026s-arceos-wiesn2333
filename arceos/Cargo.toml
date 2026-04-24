@@ -94,7 +94,3 @@ axfs_ramfs = { path = "./axfs_ramfs" }
 
 [patch.crates-io]
 kernel_guard = { path = "../crates/kernel_guard"}
-
-[profile.release]
-debug = true
-lto = true
