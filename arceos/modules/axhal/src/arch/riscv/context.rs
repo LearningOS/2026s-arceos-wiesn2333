@@ -1,4 +1,4 @@
-use core::arch::naked_asm;
+use core::arch::{asm, naked_asm};
 use memory_addr::VirtAddr;
 #[cfg(feature = "uspace")]
 use memory_addr::PhysAddr;
@@ -318,6 +318,6 @@ unsafe extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task:
         ld      ra, 0(a1)
 
         ret",
-        
+
     )
 }
