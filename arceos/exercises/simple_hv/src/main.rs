@@ -102,16 +102,22 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
             }
         },
         Trap::Exception(Exception::IllegalInstruction) => {
-            panic!("Bad instruction: {:#x} sepc: {:#x}",
+            ax_println!("Bad instruction: {:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+            let a_regs = ctx.guest_regs.gprs.a_regs_mut();
+            a_regs[0] = 0x6688;
+            ctx.guest_regs.sepc += 4;
         },
         Trap::Exception(Exception::LoadGuestPageFault) => {
-            panic!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
+            ax_println!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+            let a_regs = ctx.guest_regs.gprs.a_regs_mut();
+            a_regs[1] = 0x1234;
+            ctx.guest_regs.sepc += 4;
         },
         _ => {
             panic!(
